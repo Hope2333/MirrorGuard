@@ -49,7 +49,9 @@ typedef enum {
     PROGRESS_STYLE_DOTS,           // 点样式
     PROGRESS_STYLE_UNICODE,        // Unicode字符样式
     PROGRESS_STYLE_ASCII,          // ASCII字符样式
-    PROGRESS_STYLE_CUSTOM          // 自定义样式
+    PROGRESS_STYLE_CUSTOM,         // 自定义样式
+    PROGRESS_STYLE_BAR,            // 彩色条形样式
+    PROGRESS_STYLE_RICH            // Rich样式
 } ProgressStyle;
 
 // 进度条颜色方案
@@ -66,7 +68,8 @@ typedef enum {
 
 // 进度条结构
 typedef struct {
-    char name[MAX_PATH];           // 进度条名称
+    char name[80];                 // 截断的名称
+    char full_name[MAX_PATH];      // 完整名称用于日志
     volatile size_t current;       // 当前进度
     volatile size_t total;         // 总量
     volatile double speed;         // 速度 (bytes/s)
@@ -76,6 +79,7 @@ typedef struct {
     pthread_mutex_t lock;          // 线程锁
     ProgressStyle style;           // 样式
     ProgressColor color;           // 颜色
+    int level;                     // 0=详细, 1=总体
 } ProgressBar;
 
 // 全局配置
@@ -103,14 +107,14 @@ typedef struct {
     const char *output_format; // "sha256sum", "json", "csv"
     const char *log_file;
     FILE *log_fp;
-
+    
     // 操作模式
     int generate_mode;
     int verify_mode;
     int compare_mode;
     int diff_mode;
     int direct_compare_mode;
-
+    
     // 参数
     const char *source_dirs[MAX_SOURCE_DIRS];
     int source_count;
@@ -120,7 +124,7 @@ typedef struct {
     int manifest_count;
     const char *source_dir1;
     const char *source_dir2;
-
+    
     // 进度条管理
     ProgressBar progress_bars[MAX_PROGRESS_BARS];
     int progress_bar_count;
@@ -148,15 +152,20 @@ void init_config();
 int parse_args(int argc, char **argv);
 int validate_args(int argc, char **argv);
 void cleanup_config();
-int is_tui_option(const char *arg);  // 新增
+int is_tui_option(const char *arg);
 
 // 进度条相关函数
-void init_progress_bars();
-void create_progress_bar(const char *name, size_t total, int index);
-void update_progress_bar(int index, size_t current);
-void finish_progress_bar(int index);
-void display_progress_bars();
-void cleanup_progress_bars();
+void init_progress_system();
+void create_file_progress(const char *filename, size_t total_files);
+void update_file_progress(size_t current_file);
+void create_overall_progress(const char *name, size_t total_sources);
+void update_overall_progress(size_t current_source);
+void finish_file_progress();
+void finish_overall_progress();
+void display_all_progress();
+void cleanup_progress_system();
+void hide_progress_temporarily();
+void show_progress_after_log();
 
 // TUI 相关函数
 void init_tui();

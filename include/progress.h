@@ -3,13 +3,16 @@
 
 #include "config.h"
 
-void init_progress_bars();
-void create_progress_bar(const char *name, size_t total, int index);
-void update_progress_bar(int index, size_t current);
-void finish_progress_bar(int index);
-void display_progress_bars();
-void cleanup_progress_bars();
-void update_single_progress_bar(int index);
-void print_progress_bar(const ProgressBar *bar);
+void init_progress_system();
+void create_file_progress(const char *filename, size_t total_files);
+void update_file_progress(size_t current_file);
+void create_overall_progress(const char *name, size_t total_sources);
+void update_overall_progress(size_t current_source);
+void finish_file_progress();
+void finish_overall_progress();
+void display_all_progress();
+void cleanup_progress_system();
+void hide_progress_temporarily();
+void show_progress_after_log();
 
 #endif // PROGRESS_H

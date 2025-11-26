@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 600
 #include "tui.h"
 #include "config.h"
 #include "logging.h"
@@ -16,9 +17,6 @@ extern Statistics stats;
 
 // 终端控制结构
 static struct termios orig_termios;
-
-// 函数声明
-static int kbhit(void);
 
 int is_tui_enabled() {
     return config.tui_mode != TUI_MODE_NONE;
@@ -365,7 +363,7 @@ void render_debug_ui() {
 }
 
 // 检查键盘输入
-static int kbhit() {
+int kbhit() {
     struct termios oldt, newt;
     int ch;
     int oldf;

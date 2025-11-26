@@ -6,5 +6,6 @@
 char* normalize_path(const char *path);
 int is_safe_path(const char *path);
 int should_exclude(const char *path);
+void free_path(char **path_ptr);
 
 #endif // PATH_UTILS_H

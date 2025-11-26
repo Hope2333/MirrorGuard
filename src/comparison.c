@@ -14,13 +14,6 @@
 extern Config config;
 extern volatile sig_atomic_t g_interrupted;
 
-// 添加辅助函数：按路径排序文件列表
-int compare_file_info_by_path(const void *a, const void *b) {
-    const FileInfo *info_a = (const FileInfo *)a;
-    const FileInfo *info_b = (const FileInfo *)b;
-    return strcmp(info_a->path, info_b->path);
-}
-
 // 比较两个清单文件
 int compare_manifests(const char *manifest1, const char *manifest2) {
     if (!manifest1 || !manifest2) {

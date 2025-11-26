@@ -4,7 +4,6 @@
 #include "path_utils.h"
 #include "directory_scan.h"
 #include "file_utils.h"
-#include "progress.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,13 +29,6 @@ int generate_manifest_multi(const char *manifest_path) {
     }
 
     log_msg(LOG_INFO, "开始扫描 %d 个源目录", config.source_count);
-
-    // 为每个源目录创建进度条
-    for (int i = 0; i < config.source_count; i++) {
-        char progress_name[MAX_PATH];
-        snprintf(progress_name, sizeof(progress_name), "扫描源%d", i + 1);
-        create_progress_bar(progress_name, 0, i); // 初始化为0，后续更新
-    }
 
     // 递归收集所有源目录的文件
     for (int i = 0; i < config.source_count; i++) {
@@ -88,11 +80,6 @@ int generate_manifest_multi(const char *manifest_path) {
     log_msg(LOG_INFO, "多源清单生成成功: %s", manifest_path);
     log_msg(LOG_INFO, "总计文件数: %zu", list->count);
 
-    // 完成所有进度条
-    for (int i = 0; i < config.source_count; i++) {
-        finish_progress_bar(i);
-    }
-
     free_file_list(list);
     return MIRRORGUARD_OK;
 }
@@ -135,20 +122,7 @@ int verify_mirror(const char *mirror_dir, const char *manifest_path) {
 
     log_msg(LOG_INFO, "读取清单文件: %s", manifest_path);
 
-    // 先统计总文件数
-    long pos = ftell(manifest);
-    while (fgets(line, sizeof(line), manifest)) {
-        if (sscanf(line, "%64s *%[^\n]", expected_hash, rel_path) == 2) {
-            total_files++;
-        }
-    }
-    fseek(manifest, pos, SEEK_SET);
-
-    // 创建进度条
-    create_progress_bar("验证镜像", total_files, 0);
-
     // 验证清单中的每个文件
-    int processed = 0;
     while (fgets(line, sizeof(line), manifest)) {
         if (g_interrupted) {
             break;
@@ -159,7 +133,10 @@ int verify_mirror(const char *mirror_dir, const char *manifest_path) {
             continue; // 跳过无效行
         }
 
+        total_files++;
+
         if (should_exclude(rel_path)) {
+            total_files--;
             continue;
         }
 
@@ -186,9 +163,6 @@ int verify_mirror(const char *mirror_dir, const char *manifest_path) {
         else if (result == FILE_STATUS_ERROR) stats.error_files++;
         pthread_mutex_unlock(&stats.lock);
 
-        processed++;
-        update_progress_bar(0, processed);
-
         // 从mirror_files中移除已验证的文件
         if (config.extra_check) {
             for (size_t i = 0; i < mirror_files->count; i++) {
@@ -207,9 +181,6 @@ int verify_mirror(const char *mirror_dir, const char *manifest_path) {
     }
 
     fclose(manifest);
-
-    // 完成进度条
-    finish_progress_bar(0);
 
     // 检查额外文件
     if (config.extra_check) {

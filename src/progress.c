@@ -10,77 +10,110 @@
 extern Config config;
 extern Statistics stats;
 
-void init_progress_bars() {
-    config.progress_bar_count = 0;
-    for (int i = 0; i < MAX_PROGRESS_BARS; i++) {
-        strcpy(config.progress_bars[i].name, "");
-        config.progress_bars[i].current = 0;
-        config.progress_bars[i].total = 0;
-        config.progress_bars[i].speed = 0.0;
-        config.progress_bars[i].last_update = time(NULL);
-        config.progress_bars[i].active = 0;
-        config.progress_bars[i].finished = 0;
-        config.progress_bars[i].style = config.progress_style;
-        config.progress_bars[i].color = config.progress_color;
-        pthread_mutex_init(&config.progress_bars[i].lock, NULL);
-    }
+static ProgressBar file_bar = {0};
+static ProgressBar overall_bar = {0};
+static int progress_visible = 0;
+static int progress_lines = 0;
+
+void init_progress_system() {
+    memset(&file_bar, 0, sizeof(ProgressBar));
+    memset(&overall_bar, 0, sizeof(ProgressBar));
+    pthread_mutex_init(&file_bar.lock, NULL);
+    pthread_mutex_init(&overall_bar.lock, NULL);
 }
 
-void create_progress_bar(const char *name, size_t total, int index) {
-    if (index >= MAX_PROGRESS_BARS || config.no_progress_bar) return;
+void create_file_progress(const char *filename, size_t total_files) {
+    if (config.no_progress_bar) return;
     
-    pthread_mutex_lock(&config.progress_bars[index].lock);
-    strncpy(config.progress_bars[index].name, name, MAX_PATH - 1);
-    config.progress_bars[index].name[MAX_PATH - 1] = '\0';
-    config.progress_bars[index].total = total;
-    config.progress_bars[index].current = 0;
-    config.progress_bars[index].active = 1;
-    config.progress_bars[index].finished = 0;
-    config.progress_bars[index].style = config.progress_style;
-    config.progress_bars[index].color = config.progress_color;
-    pthread_mutex_unlock(&config.progress_bars[index].lock);
+    pthread_mutex_lock(&file_bar.lock);
+    // 截断文件名
+    snprintf(file_bar.name, sizeof(file_bar.name) - 1, "%.40s", filename);
+    strncpy(file_bar.full_name, filename, sizeof(file_bar.full_name) - 1);
+    file_bar.full_name[sizeof(file_bar.full_name) - 1] = '\0';
+    file_bar.total = total_files;
+    file_bar.current = 0;
+    file_bar.active = 1;
+    file_bar.finished = 0;
+    file_bar.style = config.progress_style;
+    file_bar.color = config.progress_color;
+    file_bar.level = 0;
+    pthread_mutex_unlock(&file_bar.lock);
     
-    if (index >= config.progress_bar_count) {
-        config.progress_bar_count = index + 1;
-    }
+    progress_visible = 1;
+    display_all_progress();
 }
 
-void update_progress_bar(int index, size_t current) {
-    if (index >= MAX_PROGRESS_BARS || config.no_progress_bar) return;
+void update_file_progress(size_t current_file) {
+    if (config.no_progress_bar) return;
     
-    pthread_mutex_lock(&config.progress_bars[index].lock);
-    config.progress_bars[index].current = current;
+    pthread_mutex_lock(&file_bar.lock);
+    file_bar.current = current_file;
     time_t now = time(NULL);
-    if (now != config.progress_bars[index].last_update) {
-        double elapsed = now - config.progress_bars[index].last_update;
+    if (now != file_bar.last_update) {
+        double elapsed = now - file_bar.last_update;
         if (elapsed > 0) {
-            config.progress_bars[index].speed = 
-                (current - config.progress_bars[index].current) / elapsed;
+            file_bar.speed = (current_file - file_bar.current) / elapsed;
         }
-        config.progress_bars[index].last_update = now;
+        file_bar.last_update = now;
     }
-    pthread_mutex_unlock(&config.progress_bars[index].lock);
+    pthread_mutex_unlock(&file_bar.lock);
     
-    if (config.progress) {
-        display_progress_bars();
-    }
+    display_all_progress();
 }
 
-void finish_progress_bar(int index) {
-    if (index >= MAX_PROGRESS_BARS || config.no_progress_bar) return;
+void finish_file_progress() {
+    if (config.no_progress_bar) return;
     
-    pthread_mutex_lock(&config.progress_bars[index].lock);
-    config.progress_bars[index].finished = 1;
-    config.progress_bars[index].active = 0;
-    pthread_mutex_unlock(&config.progress_bars[index].lock);
+    pthread_mutex_lock(&file_bar.lock);
+    file_bar.finished = 1;
+    file_bar.active = 0;
+    pthread_mutex_unlock(&file_bar.lock);
     
-    if (config.progress) {
-        display_progress_bars();
-    }
+    display_all_progress();
 }
 
-void print_progress_bar(const ProgressBar *bar) {
-    if (!bar || !bar->active) return;
+void create_overall_progress(const char *name, size_t total_sources) {
+    if (config.no_progress_bar) return;
+    
+    pthread_mutex_lock(&overall_bar.lock);
+    strncpy(overall_bar.name, name, sizeof(overall_bar.name) - 1);
+    overall_bar.name[sizeof(overall_bar.name) - 1] = '\0';
+    overall_bar.total = total_sources;
+    overall_bar.current = 0;
+    overall_bar.active = 1;
+    overall_bar.finished = 0;
+    overall_bar.style = config.progress_style;
+    overall_bar.color = config.progress_color;
+    overall_bar.level = 1;
+    pthread_mutex_unlock(&overall_bar.lock);
+    
+    progress_visible = 1;
+    display_all_progress();
+}
+
+void update_overall_progress(size_t current_source) {
+    if (config.no_progress_bar) return;
+    
+    pthread_mutex_lock(&overall_bar.lock);
+    overall_bar.current = current_source;
+    pthread_mutex_unlock(&overall_bar.lock);
+    
+    display_all_progress();
+}
+
+void finish_overall_progress() {
+    if (config.no_progress_bar) return;
+    
+    pthread_mutex_lock(&overall_bar.lock);
+    overall_bar.finished = 1;
+    overall_bar.active = 0;
+    pthread_mutex_unlock(&overall_bar.lock);
+    
+    display_all_progress();
+}
+
+void print_single_progress_bar(const ProgressBar *bar, int max_name_length) {
+    if (!bar || (!bar->active && !bar->finished)) return;
     
     double percent = bar->total > 0 ? (double)bar->current / bar->total * 100.0 : 0.0;
     int bar_width = 30;
@@ -89,98 +122,185 @@ void print_progress_bar(const ProgressBar *bar) {
     // 颜色设置
     const char *color = "";
     const char *reset = "\033[0m";
+    const char *bright = "\033[1m";  // 加亮
+    const char *bar_color_start = "";
+    
     switch (bar->color) {
-        case PROGRESS_COLOR_GREEN: color = "\033[32m"; break;
-        case PROGRESS_COLOR_BLUE: color = "\033[34m"; break;
-        case PROGRESS_COLOR_YELLOW: color = "\033[33m"; break;
-        case PROGRESS_COLOR_RED: color = "\033[31m"; break;
-        case PROGRESS_COLOR_CYAN: color = "\033[36m"; break;
-        case PROGRESS_COLOR_MAGENTA: color = "\033[35m"; break;
-        case PROGRESS_COLOR_RAINBOW: color = "\033[35m"; break; // 简化彩虹色
-        default: color = "\033[32m"; break; // 默认绿色
+        case PROGRESS_COLOR_GREEN: 
+            color = "\033[32m"; 
+            bar_color_start = "\033[48;5;28m\033[38;5;15m";  // 绿色背景
+            break;
+        case PROGRESS_COLOR_BLUE: 
+            color = "\033[34m"; 
+            bar_color_start = "\033[48;5;21m\033[38;5;15m";  // 蓝色背景
+            break;
+        case PROGRESS_COLOR_YELLOW: 
+            color = "\033[33m"; 
+            bar_color_start = "\033[48;5;226m\033[38;5;0m";  // 黄色背景
+            break;
+        case PROGRESS_COLOR_RED: 
+            color = "\033[31m"; 
+            bar_color_start = "\033[48;5;196m\033[38;5;15m";  // 红色背景
+            break;
+        case PROGRESS_COLOR_CYAN: 
+            color = "\033[36m"; 
+            bar_color_start = "\033[48;5;51m\033[38;5;15m";  // 青色背景
+            break;
+        case PROGRESS_COLOR_MAGENTA: 
+            color = "\033[35m"; 
+            bar_color_start = "\033[48;5;201m\033[38;5;15m";  // 洋红色背景
+            break;
+        case PROGRESS_COLOR_RAINBOW: 
+            color = "\033[35m"; 
+            bar_color_start = "\033[48;5;208m\033[38;5;15m";  // 彩虹色效果（橙色）
+            break;
+        default: 
+            color = "\033[32m"; 
+            bar_color_start = "\033[48;5;28m\033[38;5;15m";  // 默认绿色背景
+            break;
     }
     
-    // 进度条样式
-    const char *start_bracket = "[";
-    const char *end_bracket = "]";
-    const char *fill_char = "=";
-    const char *empty_char = "-";
+    // 截断名称以适应长度
+    char truncated_name[256];
+    if (strlen(bar->name) > max_name_length) {
+        strncpy(truncated_name, bar->name, max_name_length - 3);
+        truncated_name[max_name_length - 3] = '\0';
+        strcat(truncated_name, "...");
+    } else {
+        strcpy(truncated_name, bar->name);
+    }
     
+    // 根据样式打印进度条
     switch (bar->style) {
+        case PROGRESS_STYLE_BAR:
+            printf("%s%-*s%s %s%6.2f%%%s ", bright, max_name_length, truncated_name, reset, color, percent, reset);
+            
+            // 彩色条形进度条
+            printf("[");
+            for (int i = 0; i < bar_width; i++) {
+                if (i < filled) {
+                    printf("%s%s%s", bar_color_start, "━", reset);
+                } else {
+                    printf("─");
+                }
+            }
+            printf("] ");
+            printf("%zu/%zu", bar->current, bar->total);
+            
+            if (bar->speed > 0) {
+                printf(" (%.2f/s)", bar->speed);
+            }
+            
+            if (bar->finished) {
+                printf(" \033[32m✓\033[0m");
+            }
+            break;
+            
+        case PROGRESS_STYLE_RICH:
+            printf("%s%-*s%s %s%6.2f%%%s [", bright, max_name_length, truncated_name, reset, color, percent, reset);
+            
+            for (int i = 0; i < bar_width; i++) {
+                if (i < filled) {
+                    printf("\033[48;5;28m\033[38;5;15m█\033[0m");  // 绿色背景
+                } else {
+                    printf("░");
+                }
+            }
+            printf("] ");
+            printf("%zu/%zu", bar->current, bar->total);
+            
+            if (bar->speed > 0) {
+                printf(" (%.2f/s)", bar->speed);
+            }
+            
+            if (bar->finished) {
+                printf(" \033[32m✓\033[0m");
+            }
+            break;
+            
         case PROGRESS_STYLE_BARS:
-            start_bracket = "[";
-            end_bracket = "]";
-            fill_char = "=";
-            empty_char = "-";
-            break;
-        case PROGRESS_STYLE_DOTS:
-            start_bracket = "(";
-            end_bracket = ")";
-            fill_char = "•";
-            empty_char = "°";
-            break;
-        case PROGRESS_STYLE_UNICODE:
-            start_bracket = "⌊";
-            end_bracket = "⌋";
-            fill_char = "█";
-            empty_char = "░";
-            break;
-        case PROGRESS_STYLE_ASCII:
-            start_bracket = "|";
-            end_bracket = "|";
-            fill_char = "#";
-            empty_char = " ";
-            break;
         default:
-            start_bracket = "[";
-            end_bracket = "]";
-            fill_char = "=";
-            empty_char = "-";
+            printf("%s%-*s%s %s%3.0f%%%s [", color, max_name_length, truncated_name, reset, color, percent, reset);
+            
+            for (int i = 0; i < bar_width; i++) {
+                if (i < filled) {
+                    printf("=");
+                } else {
+                    printf("-");
+                }
+            }
+            
+            printf("] %zu/%zu", bar->current, bar->total);
+            
+            if (bar->speed > 0) {
+                printf(" (%.2f/s)", bar->speed);
+            }
+            
+            if (bar->finished) {
+                printf(" ✅");
+            }
             break;
     }
-    
-    printf("%s%-20s%s %s%3.0f%%%s %s", color, bar->name, reset, color, percent, reset, start_bracket);
-    
-    for (int i = 0; i < bar_width; i++) {
-        if (i < filled) {
-            printf("%s", fill_char);
-        } else {
-            printf("%s", empty_char);
-        }
-    }
-    
-    printf("%s %zu/%zu", end_bracket, bar->current, bar->total);
-    
-    if (bar->speed > 0) {
-        printf(" (%.2f/s)", bar->speed);
-    }
-    
-    if (bar->finished) {
-        printf(" ✅");
-    }
-    
-    printf("\n");
 }
 
-void display_progress_bars() {
-    if (config.no_progress_bar) return;
+void display_all_progress() {
+    if (config.no_progress_bar || !progress_visible) return;
     
-    printf("\033[2J\033[H"); // 清屏并回到顶部
+    // 隐藏当前行（进度条）
+    printf("\033[2K\r");
     
-    for (int i = 0; i < config.progress_bar_count; i++) {
-        pthread_mutex_lock(&config.progress_bars[i].lock);
-        if (config.progress_bars[i].active || config.progress_bars[i].finished) {
-            print_progress_bar(&config.progress_bars[i]);
-        }
-        pthread_mutex_unlock(&config.progress_bars[i].lock);
+    // 显示文件进度
+    pthread_mutex_lock(&file_bar.lock);
+    if (file_bar.active || file_bar.finished) {
+        print_single_progress_bar(&file_bar, 30);
+        printf("\n");
+        progress_lines = 1;
     }
+    pthread_mutex_unlock(&file_bar.lock);
+    
+    // 显示总体进度
+    pthread_mutex_lock(&overall_bar.lock);
+    if (overall_bar.active || overall_bar.finished) {
+        printf("\033[2K\r"); // 清除当前行
+        print_single_progress_bar(&overall_bar, 30);
+        printf("\n");
+        progress_lines = 2;
+    }
+    pthread_mutex_unlock(&overall_bar.lock);
     
     fflush(stdout);
 }
 
-void cleanup_progress_bars() {
-    for (int i = 0; i < MAX_PROGRESS_BARS; i++) {
-        pthread_mutex_destroy(&config.progress_bars[i].lock);
+void hide_progress_temporarily() {
+    if (config.progress && !config.no_progress_bar && progress_visible) {
+        // 清除进度条行
+        for (int i = 0; i < progress_lines; i++) {
+            printf("\033[1A\033[2K"); // 上移一行并清除
+        }
+        fflush(stdout);
+        progress_visible = 0;
     }
-    config.progress_bar_count = 0;
+}
+
+void show_progress_after_log() {
+    if (config.progress && !config.no_progress_bar) {
+        progress_visible = 1;
+        display_all_progress();
+    }
+}
+
+void cleanup_progress_system() {
+    // 清除当前行的进度条
+    if (config.progress && !config.no_progress_bar) {
+        printf("\r\033[2K"); // 清除当前行
+        if (progress_lines > 0) {
+            printf("\033[%dA\033[2K", progress_lines); // 清除多行
+        }
+        fflush(stdout);
+    }
+    
+    pthread_mutex_destroy(&file_bar.lock);
+    pthread_mutex_destroy(&overall_bar.lock);
+    progress_visible = 0;
+    progress_lines = 0;
 }

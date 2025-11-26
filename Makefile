@@ -59,6 +59,7 @@ package: $(TARGET)
 	@mkdir -p package
 	cp $(TARGET) package/
 	cp README.md package/ 2>/dev/null || true
+	cp LICENSE package/ 2>/dev/null || true
 	tar -czf $(TARGET)-$(VERSION)-$(shell date +%Y%m%d).tar.gz -C package .
 	@echo "📦 打包完成: $(TARGET)-$(VERSION)-$(shell date +%Y%m%d).tar.gz"
 
@@ -83,7 +84,7 @@ help:
 	@echo "  clean     - 清理构建文件"
 	@echo "  install   - 安装到系统"
 	@echo "  uninstall - 卸载程序"
-	@echo "  test      - 迢行测试"
+	@echo "  test      - 运行测试"
 	@echo "  package   - 打包发布版本"
 	@echo "  info      - 显示项目信息"
 	@echo "  help      - 显示此帮助"
@@ -93,7 +94,6 @@ help:
 	@echo "  make debug        # 编译调试版本"
 	@echo "  make install      # 安装程序"
 	@echo "  make clean        # 清理项目"
-	@echo "  make VERSION=1.0.0 # 使用特定版本编译"
 
 # 便捷别名
 build: all

@@ -12,42 +12,41 @@ extern Config config;
 // 路径规范化 (移除冗余分隔符/..) - 返回动态分配的字符串
 char* normalize_path(const char *path) {
     if (!path) return NULL;
-
+    
     char *result = malloc(MAX_PATH);
     if (!result) return NULL;
-
+    
     char temp[MAX_PATH];
-
+    
     if (strlen(path) >= MAX_PATH) {
-        // 注意：这里不能调用 log_msg，因为会导致循环依赖
-        // 只能在调用者处处理错误
+        log_msg(LOG_ERROR, "路径过长: %s", path);
         free(result);
         return NULL;
     }
-
+    
     // 复制并处理路径
     strncpy(temp, path, sizeof(temp) - 1);
     temp[sizeof(temp) - 1] = '\0';
-
+    
     // 转换Windows分隔符
     for (char *p = temp; *p; ++p) {
         if (*p == '\\') *p = '/';
     }
-
+    
     // 处理绝对路径 (以/开头)
     int is_absolute = (temp[0] == '/');
-
+    
     char *p = temp;
     char *q = result;
     int skip_slash = 1;
-
+    
     // 如果是绝对路径，保留开头的/
     if (is_absolute) {
         *q++ = '/';
         skip_slash = 0;
         p++;
     }
-
+    
     while (*p) {
         if (*p == '/') {
             if (!skip_slash) {
@@ -87,7 +86,7 @@ char* normalize_path(const char *path) {
             }
         }
     }
-
+    
     // 如果结果为空（比如相对路径".."），返回"."
     if (q == result || (is_absolute && q == result + 1 && result[0] == '/')) {
         if (is_absolute) {
@@ -100,38 +99,38 @@ char* normalize_path(const char *path) {
     } else {
         *q = '\0';
     }
-
+    
     return result;
 }
 
 // 检查路径是否安全 (防止路径遍历攻击)
 int is_safe_path(const char *path) {
     if (!path) return 0;
-
+    
     // 检查是否包含 ../
-    if (strstr(path, "../") || strstr(path, "..\\") ||
+    if (strstr(path, "../") || strstr(path, "..\\") || 
         (strlen(path) >= 3 && strcmp(path + strlen(path) - 3, "/..") == 0)) {
         return 0;
     }
-
+    
     return 1;
 }
 
 // 检查是否应排除文件
 int should_exclude(const char *path) {
     if (!path) return 1;
-
+    
     // 检查隐藏文件
     if (config.ignore_hidden) {
         const char *base = strrchr(path, '/');
         if (!base) base = path;
         else base++;
-
+        
         if (base[0] == '.' && base[1] != '\0' && base[1] != '/') {
             return 1;
         }
     }
-
+    
     // 检查包含模式
     if (config.include_count > 0) {
         int matched = 0;
@@ -160,7 +159,7 @@ int should_exclude(const char *path) {
         }
         if (!matched) return 1;
     }
-
+    
     // 检查排除模式
     for (int i = 0; i < config.exclude_count; i++) {
         if (config.exclude_patterns[i]) {
@@ -185,6 +184,14 @@ int should_exclude(const char *path) {
             }
         }
     }
-
+    
     return 0;
+}
+
+// 安全释放路径内存
+void free_path(char **path_ptr) {
+    if (path_ptr && *path_ptr) {
+        free(*path_ptr);
+        *path_ptr = NULL;
+    }
 }

@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <fcntl.h>  // 添加 fcntl.h 用于 kbhit 函数
+#include <fcntl.h>
 #include <string.h>
 
 volatile sig_atomic_t g_interrupted = 0;
@@ -16,21 +16,33 @@ Statistics stats = {0};
 // 信号处理
 void signal_handler(int sig) {
     g_interrupted = 1;
-    // 注意：在信号处理函数中避免使用复杂函数
     fprintf(stderr, "\n接收到信号 %d，正在安全退出...\n", sig);
+    
+    // 隐藏进度条以完成清理
+    hide_progress_temporarily();
+}
+
+void safe_exit(int status) {
+    // 清理进度系统
+    cleanup_progress_system();
+    
+    // 清理配置
+    cleanup_config();
+    
+    exit(status);
 }
 
 void init_config() {
     // 信号处理
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
-
+    
     // 默认配置
     config.follow_symlinks = 0;
     config.quiet = 0;
     config.extra_check = 1;
     config.ignore_hidden = 0;
-    config.progress = 0;
+    config.progress = 1;  // 默认启用进度条
     config.verbose = 0;
     config.dry_run = 0;
     config.force_overwrite = 0;
@@ -39,7 +51,7 @@ void init_config() {
     config.recursive = 1;
     config.preserve_timestamps = 0;
     config.case_sensitive = 1;
-    config.no_progress_bar = 0;  // 默认显示进度条
+    config.no_progress_bar = 0;  // 默认不禁用进度条
     config.tui_mode = TUI_MODE_NONE;  // 默认无TUI
     config.progress_style = PROGRESS_STYLE_DEFAULT;
     config.progress_color = PROGRESS_COLOR_GREEN;
@@ -48,14 +60,14 @@ void init_config() {
     config.output_format = "sha256sum";
     config.log_file = NULL;
     config.log_fp = NULL;
-
+    
     // 操作模式
     config.generate_mode = 0;
     config.verify_mode = 0;
     config.compare_mode = 0;
     config.diff_mode = 0;
     config.direct_compare_mode = 0;
-
+    
     // 参数初始化
     config.source_count = 0;
     config.mirror_dir = NULL;
@@ -63,7 +75,7 @@ void init_config() {
     config.manifest_count = 0;
     config.source_dir1 = NULL;
     config.source_dir2 = NULL;
-
+    
     // 初始化统计
     stats.total_files = 0;
     stats.processed_files = 0;
@@ -74,14 +86,14 @@ void init_config() {
     stats.bytes_processed = 0;
     pthread_mutex_init(&stats.lock, NULL);
     gettimeofday(&stats.start_time, NULL);
-
-    // 初始化进度条
-    init_progress_bars();
+    
+    // 初始化进度系统
+    init_progress_system();
 }
 
 int parse_args(int argc, char **argv) {
     if (argc == 0 || argv == NULL) return MIRRORGUARD_OK; // 避免未使用警告
-
+    
     // 检查是否有 --tui 参数
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--tui=", 6) == 0) {
@@ -95,10 +107,18 @@ int parse_args(int argc, char **argv) {
             }
         }
     }
-
+    
+    // 检查是否有 --no-bar 参数
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--no-bar") == 0) {
+            config.no_progress_bar = 1;
+            config.progress = 0;  // 同时禁用进度显示
+        }
+    }
+    
     // 参数解析逻辑
     int opt;
-    while ((opt = getopt(argc, argv, "gvcdhVqnpfrHeCFx:i:o:l:")) != -1) {  // 移除 't' 选项
+    while ((opt = getopt(argc, argv, "gvcdhVqnpfrHeCFx:i:o:l:")) != -1) {
         switch (opt) {
             case 'g': // generate mode
                 config.generate_mode = 1;
@@ -114,8 +134,9 @@ int parse_args(int argc, char **argv) {
                 break;
             case 'h': // help
                 return MIRRORGUARD_ERROR_INVALID_ARGS; // 触发帮助显示
-            case 'V': // version (handled in main)
-                return MIRRORGUARD_ERROR_INVALID_ARGS; // 触发帮助显示
+            case 'V': // verbose
+                config.verbose++;
+                break;
             case 'q': // quiet
                 config.quiet = 1;
                 break;
@@ -163,21 +184,30 @@ int parse_args(int argc, char **argv) {
                 return MIRRORGUARD_ERROR_INVALID_ARGS;
         }
     }
-
+    
     // 解析剩余参数（源目录、清单文件等）
     int remaining = optind;
+    
     if (config.generate_mode) {
-        // 解析生成模式的参数
-        while (remaining < argc && argv[remaining][0] != '-' && !is_tui_option(argv[remaining])) {
-            if (config.source_count < MAX_SOURCE_DIRS) {
-                config.source_dirs[config.source_count++] = argv[remaining];
-            } else {
-                break;
-            }
-            remaining++;
-        }
+        // 在生成模式下，最后一个非选项参数应该是清单文件
+        // 其他参数是源目录
         if (remaining < argc) {
-            config.manifest_path = argv[remaining];
+            // 从后往前找，最后一个非选项参数应该是清单文件
+            int last_arg = argc - 1;
+            while (last_arg >= remaining && argv[last_arg][0] == '-') {
+                last_arg--;
+            }
+            
+            if (last_arg >= remaining) {
+                config.manifest_path = argv[last_arg];
+                
+                // 其余参数是源目录
+                for (int i = remaining; i < last_arg; i++) {
+                    if (config.source_count < MAX_SOURCE_DIRS) {
+                        config.source_dirs[config.source_count++] = argv[i];
+                    }
+                }
+            }
         }
     } else if (config.verify_mode) {
         // 解析验证模式的参数
@@ -193,33 +223,29 @@ int parse_args(int argc, char **argv) {
         if (remaining < argc) config.source_dir1 = argv[remaining++];
         if (remaining < argc) config.source_dir2 = argv[remaining];
     }
-
+    
     return MIRRORGUARD_OK;
-}
-
-// 辅助函数：检查是否是 TUI 选项
-int is_tui_option(const char *arg) {
-    return strncmp(arg, "--tui=", 6) == 0;
 }
 
 int validate_args(int argc, char **argv) {
     if (argc == 0 || argv == NULL) return MIRRORGUARD_OK; // 避免未使用警告
-
-    int mode_count = config.generate_mode + config.verify_mode +
+    
+    int mode_count = config.generate_mode + config.verify_mode + 
                      config.compare_mode + config.direct_compare_mode;
-
+    
     if (mode_count == 0) {
         // 如果没有操作模式，但有 -V 参数，这可能是版本请求
         return MIRRORGUARD_OK; // 让 main 函数处理
     }
-
+    
     if (mode_count > 1) {
         return MIRRORGUARD_ERROR_CONFLICT;
     }
-
+    
     // 验证各个模式的参数
     if (config.generate_mode) {
         if (config.source_count < 1 || !config.manifest_path) {
+            fprintf(stderr, "错误: 生成模式需要至少一个源目录和一个清单文件\n");
             return MIRRORGUARD_ERROR_INVALID_ARGS;
         }
     } else if (config.verify_mode) {
@@ -235,7 +261,7 @@ int validate_args(int argc, char **argv) {
             return MIRRORGUARD_ERROR_INVALID_ARGS;
         }
     }
-
+    
     return MIRRORGUARD_OK;
 }
 
@@ -245,29 +271,29 @@ void cleanup_config() {
         fclose(config.log_fp);
         config.log_fp = NULL;
     }
-
+    
     // 清理 TUI
     if (config.tui_mode != TUI_MODE_NONE) {
         cleanup_tui();
     }
-
-    // 清理进度条
-    cleanup_progress_bars();
-
+    
+    // 清理进度系统
+    cleanup_progress_system();
+    
     // 清理排除/包含模式
     for (int i = 0; i < config.exclude_count; i++) {
         config.exclude_patterns[i] = NULL;
     }
     config.exclude_count = 0;
-
+    
     for (int i = 0; i < config.include_count; i++) {
         config.include_patterns[i] = NULL;
     }
     config.include_count = 0;
-
+    
     // 重置源目录
     config.source_count = 0;
-
+    
     // 重置清单文件
     config.manifest_count = 0;
 }

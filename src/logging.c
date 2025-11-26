@@ -1,4 +1,6 @@
 #include "logging.h"
+#include "config.h"
+#include "progress.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +12,9 @@ extern Config config;
 
 void log_msg(LogLevel level, const char *fmt, ...) {
     if (config.quiet && level > LOG_WARN) return;
+    
+    // 隐藏进度条，显示日志，然后重新显示进度
+    hide_progress_temporarily();
     
     // 获取时间戳
     struct timeval tv;
@@ -45,6 +50,9 @@ void log_msg(LogLevel level, const char *fmt, ...) {
     fprintf(output, "\n");
     va_end(args);
     fflush(output);
+    
+    // 重新显示进度条
+    show_progress_after_log();
 }
 
 void log_set_quiet(int quiet) {
