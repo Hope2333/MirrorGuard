@@ -1,5 +1,13 @@
+// include/config.h (Add version fallback)
 #ifndef CONFIG_H
 #define CONFIG_H
+
+// Add version definition here as a fallback, or ensure Makefile defines it consistently
+#ifndef MIRRORGUARD_VERSION
+// This is a fallback. The Makefile should define MIRRORGUARD_VERSION="0.1.0alpha"
+// If Makefile definition is missed, this fallback will be used.
+#define MIRRORGUARD_VERSION "0.1.0alpha_fallback"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,28 +16,28 @@
 #include <signal.h>
 #include <sys/time.h>
 
-// 宏定义
+// Macro definitions
 #define MAX_EXCLUDE_PATTERNS 16
 #define MAX_INCLUDE_PATTERNS 16
 #define MAX_SOURCE_DIRS 32
 #define MAX_MANIFEST_FILES 32
 #define MAX_PATH 4096
-#define MAX_PROGRESS_BARS 32  // 新增：最大进度条数量
+#define MAX_PROGRESS_BARS 32  // New: Maximum number of progress bars
 
-// TUI 模式
+// TUI mode
 typedef enum {
-    TUI_MODE_NONE = 0,      // 无 TUI（默认）
-    TUI_MODE_SIMPLE,        // 简单 TUI
-    TUI_MODE_ADVANCED,      // 高级 TUI
-    TUI_MODE_MINIMAL,       // 极简 TUI
-    TUI_MODE_RICH,          // 富文本 TUI
-    TUI_MODE_DEBUG          // 调试 TUI
+    TUI_MODE_NONE = 0,      // No TUI (default)
+    TUI_MODE_SIMPLE,        // Simple TUI
+    TUI_MODE_ADVANCED,      // Advanced TUI
+    TUI_MODE_MINIMAL,       // Minimal TUI
+    TUI_MODE_RICH,          // Rich text TUI
+    TUI_MODE_DEBUG          // Debug TUI
 } TuiMode;
 
-// 日志级别
+// Log levels
 typedef enum { LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG, LOG_TRACE } LogLevel;
 
-// 错误代码
+// Error codes
 typedef enum {
     MIRRORGUARD_OK = 0,
     MIRRORGUARD_ERROR_GENERAL = 1,
@@ -42,53 +50,53 @@ typedef enum {
     MIRRORGUARD_ERROR_CONFLICT = 8
 } MirrorGuardError;
 
-// 进度条样式
+// Progress bar styles
 typedef enum {
-    PROGRESS_STYLE_DEFAULT = 0,    // 默认样式
-    PROGRESS_STYLE_BARS,           // 方括号样式
-    PROGRESS_STYLE_DOTS,           // 点样式
-    PROGRESS_STYLE_UNICODE,        // Unicode字符样式
-    PROGRESS_STYLE_ASCII,          // ASCII字符样式
-    PROGRESS_STYLE_CUSTOM,         // 自定义样式
-    PROGRESS_STYLE_BAR,            // 彩色条形样式
-    PROGRESS_STYLE_RICH            // Rich样式
+    PROGRESS_STYLE_DEFAULT = 0,    // Default style
+    PROGRESS_STYLE_BARS,           // Bracket style
+    PROGRESS_STYLE_DOTS,           // Dot style
+    PROGRESS_STYLE_UNICODE,        // Unicode character style
+    PROGRESS_STYLE_ASCII,          // ASCII character style
+    PROGRESS_STYLE_CUSTOM,         // Custom style
+    PROGRESS_STYLE_BAR,            // Colorful bar style
+    PROGRESS_STYLE_RICH            // Rich style
 } ProgressStyle;
 
-// 进度条颜色方案
+// Progress bar color schemes
 typedef enum {
-    PROGRESS_COLOR_DEFAULT = 0,    // 默认颜色
-    PROGRESS_COLOR_GREEN,          // 绿色
-    PROGRESS_COLOR_BLUE,           // 蓝色
-    PROGRESS_COLOR_YELLOW,         // 黄色
-    PROGRESS_COLOR_RED,            // 红色
-    PROGRESS_COLOR_CYAN,           // 青色
-    PROGRESS_COLOR_MAGENTA,        // 洋红
-    PROGRESS_COLOR_RAINBOW         // 彩虹色
+    PROGRESS_COLOR_DEFAULT = 0,    // Default color
+    PROGRESS_COLOR_GREEN,          // Green
+    PROGRESS_COLOR_BLUE,           // Blue
+    PROGRESS_COLOR_YELLOW,         // Yellow
+    PROGRESS_COLOR_RED,            // Red
+    PROGRESS_COLOR_CYAN,           // Cyan
+    PROGRESS_COLOR_MAGENTA,        // Magenta
+    PROGRESS_COLOR_RAINBOW         // Rainbow
 } ProgressColor;
 
-// 进度条结构
+// Progress bar structure
 typedef struct {
-    char name[80];                 // 截断的名称
-    char full_name[MAX_PATH];      // 完整名称用于日志
-    volatile size_t current;       // 当前进度
-    volatile size_t total;         // 总量
-    volatile double speed;         // 速度 (bytes/s)
-    volatile time_t last_update;   // 最后更新时间
-    volatile int active;           // 是否活跃
-    volatile int finished;         // 是否完成
-    pthread_mutex_t lock;          // 线程锁
-    ProgressStyle style;           // 样式
-    ProgressColor color;           // 颜色
-    int level;                     // 0=详细, 1=总体
+    char name[80];                 // Truncated name
+    char full_name[MAX_PATH];      // Full name for logs
+    volatile size_t current;       // Current progress
+    volatile size_t total;         // Total amount
+    volatile double speed;         // Speed (bytes/s)
+    volatile time_t last_update;   // Last update time
+    volatile int active;           // Is active
+    volatile int finished;         // Is finished
+    pthread_mutex_t lock;          // Thread lock
+    ProgressStyle style;           // Style
+    ProgressColor color;           // Color
+    int level;                     // 0=detail, 1=overall
 } ProgressBar;
 
-// 全局配置
+// Global configuration
 typedef struct {
     int follow_symlinks;
     int quiet;
     int extra_check;
     int ignore_hidden;
-    int progress;                  // 是否显示进度条
+    int progress;                  // Whether to show progress bar
     int verbose;
     int dry_run;
     int force_overwrite;
@@ -96,10 +104,10 @@ typedef struct {
     int recursive;
     int preserve_timestamps;
     int case_sensitive;
-    int no_progress_bar;           // 新增：禁用进度条
-    int tui_mode;                  // 新增：TUI 模式
-    ProgressStyle progress_style;  // 新增：进度条样式
-    ProgressColor progress_color;  // 新增：进度条颜色
+    int no_progress_bar;           // New: Disable progress bar
+    int tui_mode;                  // New: TUI mode
+    ProgressStyle progress_style;  // New: Progress bar style
+    ProgressColor progress_color;  // New: Progress bar color
     const char *exclude_patterns[MAX_EXCLUDE_PATTERNS];
     int exclude_count;
     const char *include_patterns[MAX_INCLUDE_PATTERNS];
@@ -107,15 +115,15 @@ typedef struct {
     const char *output_format; // "sha256sum", "json", "csv"
     const char *log_file;
     FILE *log_fp;
-    
-    // 操作模式
+
+    // Operation modes
     int generate_mode;
     int verify_mode;
     int compare_mode;
     int diff_mode;
     int direct_compare_mode;
-    
-    // 参数
+
+    // Parameters
     const char *source_dirs[MAX_SOURCE_DIRS];
     int source_count;
     const char *mirror_dir;
@@ -124,13 +132,13 @@ typedef struct {
     int manifest_count;
     const char *source_dir1;
     const char *source_dir2;
-    
-    // 进度条管理
+
+    // Progress bar management
     ProgressBar progress_bars[MAX_PROGRESS_BARS];
     int progress_bar_count;
 } Config;
 
-// 统计信息
+// Statistics
 typedef struct {
     volatile size_t total_files;
     volatile size_t processed_files;
@@ -154,7 +162,7 @@ int validate_args(int argc, char **argv);
 void cleanup_config();
 int is_tui_option(const char *arg);
 
-// 进度条相关函数
+// Progress bar related functions
 void init_progress_system();
 void create_file_progress(const char *filename, size_t total_files);
 void update_file_progress(size_t current_file);
@@ -167,7 +175,7 @@ void cleanup_progress_system();
 void hide_progress_temporarily();
 void show_progress_after_log();
 
-// TUI 相关函数
+// TUI related functions
 void init_tui();
 void run_tui();
 void cleanup_tui();

@@ -1,5 +1,5 @@
 # MirrorGuard Makefile
-VERSION = 0.1.0alpha
+VERSION = 0.1.0
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -D_FORTIFY_SOURCE=2 -std=c99 -D_POSIX_C_SOURCE=200809L -DMIRRORGUARD_VERSION=\"$(VERSION)\" -I./include
 LDFLAGS = -lcrypto -lpthread
